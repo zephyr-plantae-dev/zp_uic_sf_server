@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict
+from typing import List, Dict, Any
 from datetime import datetime
 
 # [Refactored] 모델은 domain.models에서 통합 관리
@@ -32,29 +32,54 @@ class TopicScout:
         )
         user_prompt = (
             f"Suggest {count} unique video topics for the '{niche}' niche. "
-            "Return the result in JSON format with fields: id, title, description, target_audience, keywords."
+            "Return the result in JSON format. Use 'topics' as the root key for the list."
         )
 
         try:
             # LLM 호출
             response_data = self.llm.generate_json(system_prompt, user_prompt)
 
+            # [Robust Parsing Logic]
+            # 1. 예상 키 후보들 확인
+            raw_list = []
+            candidate_keys = ["topics", "videos", "ideas", "results", "data"]
+
+            if isinstance(response_data, dict):
+                # 후보 키들을 순회하며 리스트가 있는지 확인
+                for key in candidate_keys:
+                    if key in response_data and isinstance(response_data[key], list):
+                        raw_list = response_data[key]
+                        logger.debug(f"{method_prefix} Found topics list under key: '{key}'")
+                        break
+
+                # 후보 키에서 못 찾았다면, 값들 중 리스트인 첫 번째 것을 사용 (Fallback)
+                if not raw_list:
+                    for val in response_data.values():
+                        if isinstance(val, list):
+                            raw_list = val
+                            logger.warning(f"{method_prefix} Key mismatch. Using first list found in response.")
+                            break
+
+            elif isinstance(response_data, list):
+                # 루트가 바로 리스트인 경우
+                raw_list = response_data
+
+            if not raw_list:
+                logger.error(f"{method_prefix} Failed to find any list in LLM response: {response_data}")
+                raise ValueError("LLM response does not contain a valid list of topics.")
+
             topics = []
-            # LLM 응답 구조 유연성 처리 (리스트 직접 반환 vs 'topics' 키로 래핑)
-            raw_list = response_data.get("topics", []) if isinstance(response_data, dict) else response_data
-            # raw_list >>> 0개로 나옴. 파싱 이슈인듯
-
-            if not isinstance(raw_list, list):
-                # 만약 구조가 예상과 다를 경우 단일 객체 처리 시도
-                raw_list = [raw_list]
-
             for i, item in enumerate(raw_list):
-                # ID가 없으면 생성
-                t_id = item.get("id") or f"topic_{int(datetime.now().timestamp())}_{i}"
+                # ID 생성 및 데이터 정제
+                # item이 dict가 아닐 경우(문자열 리스트 등) 방어
+                if not isinstance(item, dict):
+                    continue
+
+                t_id = str(item.get("id")) if item.get("id") else f"topic_{int(datetime.now().timestamp())}_{i}"
 
                 topic = Topic(
                     id=t_id,
-                    title=item.get("title", "Untitled Topic"),
+                    title=item.get("title", f"Untitled Topic #{i + 1}"),
                     description=item.get("description", "No description provided."),
                     target_audience=item.get("target_audience", "General"),
                     keywords=item.get("keywords", [])
@@ -121,6 +146,7 @@ class RISResolver:
 
         for q in queries:
             # Gateway를 통해 검색 수행
+            # (주의: Gateway가 Mock일 경우 항상 같은 더미 데이터를 반환할 수 있음)
             results = self.search_engine.search(q, num_results=2)
 
             for item in results:
