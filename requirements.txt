@@ -6,6 +6,7 @@
 
 
 # [AI & API 통신]
+google-generativeai==0.8.6
 openai==2.14.0
 aiohttp==3.13.3
 

@@ -3,7 +3,6 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
@@ -26,7 +25,7 @@ except ImportError:
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from domain.production import ProductionManifest, AssetPath
+    from src.domain.production import ProductionManifest
 
 logger = logging.getLogger("System")
 

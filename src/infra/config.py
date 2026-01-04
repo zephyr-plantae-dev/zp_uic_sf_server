@@ -1,5 +1,11 @@
 import os
-from .logging import LogAgent
+from typing import Any
+from dotenv import load_dotenv # pip install python-dotenv 필요
+
+from src.infra.logging import LogAgent
+
+# .env 파일 로드
+load_dotenv()
 
 class ConfigLoader:
     """
